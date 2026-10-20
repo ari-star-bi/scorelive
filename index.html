@@ -1,1 +1,159 @@
 
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ScoreLive – Fußball live</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #0b1020;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+    header {
+      padding: 22px 16px;
+      background: #111a2e;
+      border-bottom: 2px solid #20d47b;
+    }
+    header h1 { margin: 0; color: #20d47b; }
+    header p { color: #aab5ca; margin-bottom: 0; }
+    main { max-width: 850px; margin: auto; padding: 18px; }
+    button {
+      cursor: pointer;
+      border: 0;
+      border-radius: 8px;
+      padding: 12px 16px;
+      background: #20d47b;
+      color: #07150e;
+      font-weight: bold;
+    }
+    .match, .panel {
+      background: #151e32;
+      border: 1px solid #293650;
+      border-radius: 12px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+    .match { cursor: pointer; }
+    .match:hover { border-color: #20d47b; }
+    .teams { font-size: 17px; font-weight: bold; }
+    .muted { color: #aab5ca; font-size: 14px; }
+    #status { color: #20d47b; margin: 16px 0; }
+    #details { margin-top: 24px; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>⚽ ScoreLive</h1>
+    <p>Live-Ergebnisse · Spiele · Statistiken</p>
+  </header>
+
+  <main>
+    <h2>Fußballspiele</h2>
+    <button id="refresh">Spiele laden ↻</button>
+    <div id="status">Spiele werden geladen …</div>
+    <section id="matches"></section>
+    <section id="details"></section>
+  </main>
+
+  <script>
+    const statusBox = document.getElementById("status");
+    const matchesBox = document.getElementById("matches");
+    const detailsBox = document.getElementById("details");
+
+    async function loadMatches() {
+      statusBox.textContent = "Spiele werden geladen …";
+      matchesBox.replaceChildren();
+      detailsBox.replaceChildren();
+
+      try {
+        const response = await fetch("/.netlify/functions/matches");
+        if (!response.ok) throw new Error("HTTP " + response.status);
+
+        const data = await response.json();
+        const matches = data.matches || data.matchesData || [];
+
+        if (!matches.length) {
+          statusBox.textContent =
+            data.message || "Keine Spiele gefunden. Bitte API und Server prüfen.";
+          return;
+        }
+
+        statusBox.textContent = matches.length + " Spiele gefunden.";
+
+        matches.forEach(match => {
+          const card = document.createElement("article");
+          card.className = "match";
+
+          const teams = document.createElement("div");
+          teams.className = "teams";
+          teams.textContent =
+            (match.homeTeam?.name || "Heimteam") + " – " +
+            (match.awayTeam?.name || "Auswärtsteam");
+
+          const score = document.createElement("p");
+          score.textContent =
+            "Ergebnis: " +
+            (match.score?.fullTime?.home ?? "-") + " : " +
+            (match.score?.fullTime?.away ?? "-");
+
+          const info = document.createElement("div");
+          info.className = "muted";
+          info.textContent =
+            (match.competition?.name || "Wettbewerb") + " · " +
+            (match.status || "Unbekannt");
+
+          card.append(teams, score, info);
+          card.addEventListener("click", () => loadDetails(match.id));
+          matchesBox.appendChild(card);
+        });
+      } catch (error) {
+        statusBox.textContent =
+          "Fehler beim Laden. Prüfe die Netlify Function und den API-Zugang.";
+      }
+    }
+
+    async function loadDetails(id) {
+      detailsBox.replaceChildren();
+
+      const panel = document.createElement("div");
+      panel.className = "panel";
+      const heading = document.createElement("h2");
+      heading.textContent = "Spielinformationen";
+      const message = document.createElement("p");
+      message.textContent = "Details werden geladen …";
+      panel.append(heading, message);
+      detailsBox.appendChild(panel);
+
+      try {
+        const response = await fetch(
+          "/.netlify/functions/matches?id=" + encodeURIComponent(id)
+        );
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || "Fehler " + response.status);
+        }
+
+        message.textContent = "";
+        const output = document.createElement("pre");
+        output.textContent = JSON.stringify(data, null, 2);
+        panel.appendChild(output);
+      } catch (error) {
+        message.textContent =
+          "Spieldetails konnten nicht geladen werden. Bitte prüfe die API-Berechtigungen.";
+      }
+
+      detailsBox.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    document.getElementById("refresh").addEventListener("click", loadMatches);
+    loadMatches();
+  </script>
+</body>
+</html>
